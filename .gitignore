@@ -1,0 +1,20 @@
+# Xcode / build artifacts
+build/
+DerivedData/
+*.xcworkspace/xcuserdata/
+xcuserdata/
+*.xcuserstate
+
+# XcodeGen generates this from project.yml — do not commit it.
+*.xcodeproj
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# macOS
+.DS_Store
+
+# App runtime data (thumbnails, exports) if ever placed in-tree
+*.heic
+*.jpg.tmp
