@@ -3,10 +3,17 @@ import SwiftUI
 
 @main
 struct LightroomCanonApp: App {
-    /// Shared SwiftData store for the catalog, edits, and presets.
+    /// Shared SwiftData store for the catalog, edits, and presets. CloudKit
+    /// sync is gated behind `AppConfig.iCloudSyncEnabled` — see its doc
+    /// comment for what's required to turn it on.
     let container: ModelContainer = {
+        let schema = Schema([Photo.self, EditSettings.self, Preset.self, LUTPreset.self, MaskLayer.self])
+        let configuration = ModelConfiguration(
+            schema: schema,
+            cloudKitDatabase: AppConfig.iCloudSyncEnabled ? .automatic : .none
+        )
         do {
-            return try ModelContainer(for: Photo.self, EditSettings.self, Preset.self)
+            return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

@@ -16,6 +16,14 @@ settings:
     CODE_SIGN_STYLE: Automatic
     CODE_SIGNING_ALLOWED: YES
 
+packages:
+  # Reads real .zip archives (e.g. downloaded Lightroom preset packs) entry
+  # by entry, straight into memory — no built-in Apple framework does this:
+  # AppleArchive is Apple's own (.aar/LZFSE) format, not ZIP.
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    from: 0.9.0
+
 targets:
   LightroomCanon:
     type: application
@@ -24,6 +32,8 @@ targets:
     platform: [iOS, macOS]
     sources:
       - path: LightroomCanon
+    dependencies:
+      - package: ZIPFoundation
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.LightroomCanon
@@ -31,6 +41,10 @@ targets:
         INFOPLIST_FILE: LightroomCanon/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_PREVIEWS: YES
+        # iCloud sync (optional, requires a paid Apple Developer account —
+        # see AppConfig.swift). Uncomment once you've created an iCloud
+        # container and set AppConfig.iCloudSyncEnabled = true:
+        # CODE_SIGN_ENTITLEMENTS: LightroomCanon/LightroomCanon.entitlements
       configs:
         # macOS local runs need this off; iOS ignores it.
         Debug:

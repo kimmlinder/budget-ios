@@ -7,6 +7,14 @@ struct AdjustmentSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double> = -100...100
     var neutral: Double = 0
+    /// Overrides the numeric readout, e.g. for absolute values like Kelvin
+    /// that shouldn't use the default "0 at neutral, otherwise signed" style.
+    var format: ((Double) -> String)?
+
+    private var displayText: String {
+        if let format { return format(value) }
+        return value == neutral ? "0" : String(format: "%+.0f", value)
+    }
 
     var body: some View {
         VStack(spacing: 2) {
@@ -14,7 +22,7 @@ struct AdjustmentSlider: View {
                 Text(title)
                     .font(.subheadline)
                 Spacer()
-                Text(value == neutral ? "0" : String(format: "%+.0f", value))
+                Text(displayText)
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(value == neutral ? .secondary : .primary)
             }

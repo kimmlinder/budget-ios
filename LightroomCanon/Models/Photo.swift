@@ -20,6 +20,13 @@ final class Photo {
     /// thumbnail directory. `nil` until generated.
     var thumbnailFilename: String?
 
+    /// Filename (not full path) of a cloud-straightened override image under
+    /// `LightroomCloudService.overrideDirectory`, if the user has run Cloud
+    /// Straighten on this photo. When set, the editor renders from this
+    /// image instead of decoding the original RAW — see
+    /// `EditorView.runCloudStraighten()` and `RAWProcessor.init(overrideImageURL:)`.
+    var cloudStraightenedFilename: String?
+
     // Captured EXIF, shown in the info panel.
     var cameraModel: String?
     var lensModel: String?
@@ -30,6 +37,11 @@ final class Photo {
 
     @Relationship(deleteRule: .cascade)
     var settings: EditSettings?
+
+    /// Local-adjustment masks (Subject/Sky/Background/custom selections),
+    /// composited on top of the global edit — see `RAWProcessor.applyLocalMasks`.
+    @Relationship(deleteRule: .cascade)
+    var masks: [MaskLayer] = []
 
     init(filename: String, bookmark: Data) {
         self.id = UUID()
@@ -46,16 +58,18 @@ final class Photo {
     /// `stopAccessingSecurityScopedResource()`.
     func resolveURL() -> URL? {
         var isStale = false
-        #if os(macOS)
         let options: URL.BookmarkResolutionOptions = []
-        #else
-        let options: URL.BookmarkResolutionOptions = [.withSecurityScope]
-        #endif
         return try? URL(
             resolvingBookmarkData: bookmark,
             options: options,
             relativeTo: nil,
             bookmarkDataIsStale: &isStale
         )
+    }
+
+    /// The cloud-straightened override image on disk, if one has been generated.
+    func resolveCloudStraightenedURL() -> URL? {
+        guard let cloudStraightenedFilename else { return nil }
+        return LightroomCloudService.overrideURL(for: cloudStraightenedFilename)
     }
 }
