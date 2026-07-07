@@ -28,6 +28,8 @@ struct ExportedImageDocument: FileDocument {
 struct ExportSheet: View {
     let sourceURL: URL
     let values: AdjustmentValues
+    var isOverride: Bool = false
+    var masks: [RAWProcessor.ResolvedMask] = []
     var onDismiss: () -> Void
 
     @State private var options = ExportService.Options()
@@ -49,6 +51,7 @@ struct ExportSheet: View {
                     Slider(value: $options.quality, in: 0.1...1.0)
                 }
                 Toggle("Limit long edge", isOn: $limitDimension)
+                    .tint(Theme.accent)
                 if limitDimension {
                     VStack(alignment: .leading) {
                         Text("\(Int(dimension)) px")
@@ -92,7 +95,8 @@ struct ExportSheet: View {
         let opts = options
         Task.detached(priority: .userInitiated) {
             do {
-                let data = try ExportService.render(sourceURL: sourceURL, values: values, options: opts)
+                let data = try ExportService.render(
+                    sourceURL: sourceURL, values: values, options: opts, isOverride: isOverride, masks: masks)
                 await MainActor.run {
                     document = ExportedImageDocument(data: data, contentType: opts.format.utType)
                     isRendering = false

@@ -23,15 +23,25 @@ enum ExportService {
 
     enum ExportError: Error { case decodeFailed, encodeFailed }
 
-    /// Render `values` applied to the RAW at `sourceURL` into encoded image data.
-    static func render(sourceURL: URL, values: AdjustmentValues, options: Options) throws -> Data {
-        let accessed = sourceURL.startAccessingSecurityScopedResource()
+    /// Render `values` applied to the RAW at `sourceURL` into encoded image
+    /// data. Pass `isOverride: true` when `sourceURL` is a cloud-straightened
+    /// override image (see `RAWProcessor.init(overrideImageURL:)`) rather
+    /// than the original RAW — it lives in the app's own storage, so it
+    /// needs no security-scoped access.
+    static func render(
+        sourceURL: URL, values: AdjustmentValues, options: Options, isOverride: Bool = false,
+        masks: [RAWProcessor.ResolvedMask] = []
+    ) throws -> Data {
+        let accessed = isOverride ? false : sourceURL.startAccessingSecurityScopedResource()
         defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
 
-        let processor = RAWProcessor(url: sourceURL)
-        guard var image = processor.makeImage(values) else { throw ExportError.decodeFailed }
+        let processor = isOverride
+            ? RAWProcessor(overrideImageURL: sourceURL)
+            : RAWProcessor(url: sourceURL)
+        guard let processor, var image = processor.makeImage(values, masks: masks)
+        else { throw ExportError.decodeFailed }
 
-        if let maxDimension, maxDimension > 0 {
+        if let maxDimension = options.maxDimension, maxDimension > 0 {
             let longest = max(image.extent.width, image.extent.height)
             if longest > maxDimension {
                 let scale = CGFloat(maxDimension) / longest
@@ -43,13 +53,18 @@ enum ExportService {
             rawValue: kCGImageDestinationLossyCompressionQuality as String)
         let ciOptions: [CIImageRepresentationOption: Any] = [qualityKey: options.quality]
 
+        // `exportContext` is a dedicated `CIContext`, isolated from the one
+        // driving the live preview (`RenderEngine.context`) — this render is
+        // full native RAW resolution and can take real time, and it runs on
+        // a background task (see `ExportSheet.render()`), so it must not
+        // contend with the interactive preview's own GPU work.
         let data: Data?
         switch options.format {
         case .jpeg:
-            data = RenderEngine.context.jpegRepresentation(
+            data = RenderEngine.exportContext.jpegRepresentation(
                 of: image, colorSpace: RenderEngine.colorSpace, options: ciOptions)
         case .heic:
-            data = RenderEngine.context.heifRepresentation(
+            data = RenderEngine.exportContext.heifRepresentation(
                 of: image, format: .RGBA8, colorSpace: RenderEngine.colorSpace, options: ciOptions)
         }
 

@@ -9,6 +9,7 @@ struct LibraryView: View {
 
     @State private var showingImporter = false
     @State private var importError: String?
+    private var clipboard: EditClipboard { .shared }
 
     private let columns = [GridItem(.adaptive(minimum: 140, maximum: 220), spacing: 8)]
 
@@ -26,6 +27,18 @@ struct LibraryView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .contextMenu {
+                                    Button {
+                                        clipboard.copiedValues = photo.settings?.values
+                                    } label: {
+                                        Label("Copy Edit Settings", systemImage: "doc.on.doc")
+                                    }
+                                    if clipboard.copiedValues != nil {
+                                        Button {
+                                            paste(into: photo)
+                                        } label: {
+                                            Label("Paste Edit Settings", systemImage: "doc.on.clipboard")
+                                        }
+                                    }
                                     Button(role: .destructive) { delete(photo) } label: {
                                         Label("Delete", systemImage: "trash")
                                     }
@@ -36,6 +49,7 @@ struct LibraryView: View {
                     }
                 }
             }
+            .background(Theme.canvasBackground)
             .navigationTitle("Library")
             .navigationDestination(for: Photo.self) { photo in
                 EditorView(photo: photo)
@@ -109,9 +123,18 @@ struct LibraryView: View {
         }
     }
 
+    private func paste(into photo: Photo) {
+        guard let values = clipboard.copiedValues else { return }
+        if photo.settings == nil { photo.settings = EditSettings() }
+        photo.settings?.apply(values)
+    }
+
     private func delete(_ photo: Photo) {
         if let filename = photo.thumbnailFilename {
             try? FileManager.default.removeItem(at: ThumbnailService.url(for: filename))
+        }
+        for mask in photo.masks {
+            MaskStorageService.delete(mask.maskFilename)
         }
         context.delete(photo)
     }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	Template entitlements for CloudKit sync. Not referenced by project.yml by
+	default, so it has no effect on the build until you wire it up — see
+	AppConfig.swift's doc comment for the full activation checklist. Requires
+	a paid Apple Developer Program account.
+	-->
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>Development</string>
+	<key>aps-environment</key>
+	<string>development</string>
+</dict>
+</plist>

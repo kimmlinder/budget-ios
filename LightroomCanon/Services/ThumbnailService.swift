@@ -1,11 +1,17 @@
-import CoreImage
 import Foundation
+import ImageIO
+import UniformTypeIdentifiers
 
 /// Generates and caches grid thumbnails for imported photos.
 ///
-/// Thumbnails are decoded with `CIRAWFilter` in draft mode at a reduced scale
-/// (fast, low-memory) and written as JPEG into the app's Application Support
-/// directory, keyed by the photo's id.
+/// Reads the RAW's embedded, already-rendered JPEG preview via ImageIO
+/// instead of decoding the sensor data — every Canon CR2/CR3 carries one
+/// specifically so browsers don't have to demosaic just to show a thumbnail.
+/// This is what keeps importing a folder of 100+ RAWs fast and low-memory:
+/// `CIRAWFilter`, even in draft mode, still has to hold a decoded image per
+/// file, and running that many decodes at once (one per imported photo,
+/// since each import kicks off its own background task) is a real
+/// out-of-memory risk that this sidesteps entirely.
 enum ThumbnailService {
     static let maxPixel: CGFloat = 512
 
@@ -30,28 +36,27 @@ enum ThumbnailService {
         let accessed = sourceURL.startAccessingSecurityScopedResource()
         defer { if accessed { sourceURL.stopAccessingSecurityScopedResource() } }
 
-        let rawFilter = CIRAWFilter(imageURL: sourceURL)
-        rawFilter.isDraftModeEnabled = true
+        guard let source = CGImageSourceCreateWithURL(sourceURL as CFURL, nil) else { return nil }
 
-        guard let full = rawFilter.outputImage else { return nil }
-        let scale = min(1, maxPixel / max(full.extent.width, full.extent.height))
-        let thumb = full.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        // `.IfAbsent` prefers the RAW's embedded preview and only falls back
+        // to decoding the full image if a file happens to have none — using
+        // `.Always` here would defeat the entire point by forcing a full
+        // decode every time.
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageIfAbsent: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+        ]
+        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+        else { return nil }
 
         let filename = "\(id.uuidString).jpg"
         let destination = url(for: filename)
-        let qualityKey = CIImageRepresentationOption(
-            rawValue: kCGImageDestinationLossyCompressionQuality as String)
-        guard let data = RenderEngine.context.jpegRepresentation(
-            of: thumb,
-            colorSpace: RenderEngine.colorSpace,
-            options: [qualityKey: 0.8]
+        guard let dest = CGImageDestinationCreateWithURL(
+            destination as CFURL, UTType.jpeg.identifier as CFString, 1, nil
         ) else { return nil }
-
-        do {
-            try data.write(to: destination, options: .atomic)
-            return filename
-        } catch {
-            return nil
-        }
+        CGImageDestinationAddImage(dest, thumbnail, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return filename
     }
 }
