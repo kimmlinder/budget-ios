@@ -57,6 +57,10 @@ struct EditorView: View {
     /// prompt instead of the usual "peek at original" gesture area.
     @State private var isPickingMaskPoint = false
     @State private var selectedMaskID: UUID?
+    /// Whether the Masking side panel (see `maskingSection`) is open — a
+    /// dedicated `.inspector` rather than another entry in `controlPanel`'s
+    /// long scrolling list, since that buried it hard enough to not be found.
+    @State private var showingMaskingPanel = false
 
     /// Whether this photo is currently rendered from a cloud-straightened
     /// override image rather than the original RAW — see
@@ -106,7 +110,22 @@ struct EditorView: View {
                     Label("Export", systemImage: "square.and.arrow.up")
                 }
                 .disabled(sourceURL == nil)
+                Button {
+                    showingMaskingPanel.toggle()
+                } label: {
+                    Label("Masking", systemImage: "checkerboard.rectangle")
+                }
             }
+        }
+        .inspector(isPresented: $showingMaskingPanel) {
+            ScrollView {
+                maskingSection.padding()
+            }
+            .navigationTitle("Masking")
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .inspectorColumnWidth(min: 260, ideal: 320, max: 420)
         }
         .task { loadIfNeeded() }
         .onDisappear {
@@ -277,7 +296,6 @@ struct EditorView: View {
                 geometrySection
                 calibrationSection
                 colorGradingSection
-                maskingSection
                 lookSection
                 Button(role: .destructive) {
                     resetAdjustments()
@@ -556,7 +574,7 @@ struct EditorView: View {
     /// shows its own `MaskDetailView` sliders, composited on top of the
     /// global edit in stacking order — see `RAWProcessor.applyLocalMasks`.
     private var maskingSection: some View {
-        PanelSection(title: "Masking") {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Button {
                     addSubjectMask()
