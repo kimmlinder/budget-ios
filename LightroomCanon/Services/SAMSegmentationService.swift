@@ -207,12 +207,23 @@ enum SAMSegmentationService {
         }
 
         // low-res (maskSide) space -> full 1024 input space -> crop off the
-        // letterbox padding -> original image size.
+        // letterbox padding -> original image size. The valid (non-padding)
+        // region sits at the *top* of the 1024 space (matching
+        // `letterboxedPixelArray`'s placement), which — since increasing Y
+        // is "up" in this still-bottom-left-origin CIImage space — means
+        // cropping the region starting at the leftover-height offset, not
+        // at y = 0.
         let toInputScale = CGFloat(inputSize) / CGFloat(maskSide)
         let atInputSize = bitmap.transformed(by: CGAffineTransform(scaleX: toInputScale, y: toInputScale))
-        let cropped = atInputSize.cropped(to: CGRect(origin: .zero, size: embedding.resizedSize))
+        let padding = CGFloat(inputSize) - embedding.resizedSize.height
+        let cropped = atInputSize.cropped(to: CGRect(
+            x: 0, y: padding, width: embedding.resizedSize.width, height: embedding.resizedSize.height))
+        // `cropped(to:)` leaves the crop's own origin (0, padding) rather
+        // than resetting it to (0, 0) — translate back before scaling, or
+        // the leftover offset would get scaled (and shifted) along with it.
+        let atOrigin = cropped.transformed(by: CGAffineTransform(translationX: 0, y: -padding))
         let toOriginalScale = embedding.originalSize.width / embedding.resizedSize.width
-        return cropped.transformed(by: CGAffineTransform(scaleX: toOriginalScale, y: toOriginalScale))
+        return atOrigin.transformed(by: CGAffineTransform(scaleX: toOriginalScale, y: toOriginalScale))
     }
 
     /// Draws `image` into a black `inputSize`x`inputSize` canvas, resized so
@@ -231,7 +242,18 @@ enum SAMSegmentationService {
               )
         else { throw SAMError.preprocessingFailed }
         context.interpolationQuality = .high
-        context.draw(image, in: CGRect(origin: .zero, size: resizedSize))
+        // `CGRect(origin: .zero, ...)` would place `resizedSize` at the
+        // *bottom*-left in this bottom-left-origin context — i.e. padding at
+        // the top, image at the bottom. SAM's own `ResizeLongestSide` (and
+        // the crop back out below) expects the opposite: image at the
+        // top-left, padding at the bottom/right. Since row 0 of the raw
+        // buffer this context produces is the visual top (`context.draw`
+        // handles that flip for us), placing the image at the *top* of this
+        // bottom-left-origin space means offsetting its origin by the
+        // leftover height.
+        context.draw(image, in: CGRect(
+            x: 0, y: CGFloat(inputSize) - resizedSize.height,
+            width: resizedSize.width, height: resizedSize.height))
         guard let data = context.data else { throw SAMError.preprocessingFailed }
         let rgba = data.bindMemory(to: UInt8.self, capacity: inputSize * inputSize * 4)
 
