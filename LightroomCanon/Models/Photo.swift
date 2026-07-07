@@ -35,6 +35,13 @@ final class Photo {
     var aperture: Double?
     var captureDate: Date?
 
+    /// Star rating, 0...5 — set from the Library grid, matching Lightroom's
+    /// own quick-rating convention.
+    var rating: Int = 0
+    /// A quick "keep/reject candidate" marker, independent of rating —
+    /// Lightroom's own flagging convention.
+    var isFlagged: Bool = false
+
     @Relationship(deleteRule: .cascade)
     var settings: EditSettings?
 
@@ -42,6 +49,12 @@ final class Photo {
     /// composited on top of the global edit — see `RAWProcessor.applyLocalMasks`.
     @Relationship(deleteRule: .cascade)
     var masks: [MaskLayer] = []
+
+    /// User-defined groupings this photo belongs to — the inverse side of
+    /// `PhotoCollection.photos`. A photo can be in any number of collections;
+    /// removing a collection just un-groups its photos rather than deleting
+    /// them (see `PhotoCollection`'s `.nullify` delete rule).
+    var collections: [PhotoCollection] = []
 
     init(filename: String, bookmark: Data) {
         self.id = UUID()
