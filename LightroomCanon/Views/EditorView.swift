@@ -253,6 +253,7 @@ struct EditorView: View {
                         ForEach(ToneCurveChannel.allCases) { Text($0.rawValue).tag($0) }
                     }
                     .pickerStyle(.segmented)
+                    .tint(Theme.accent)
                     switch toneCurveChannel {
                     case .rgb: ToneCurveView(points: $values.toneCurve)
                     case .red: ToneCurveView(points: $values.redToneCurve, color: .red)
@@ -262,6 +263,7 @@ struct EditorView: View {
                 }
                 PanelSection(title: "Color") {
                     Toggle("Black & White", isOn: $values.isBlackAndWhite)
+                        .tint(Theme.accent)
                     HStack {
                         AdjustmentSlider(
                             title: "Temperature",
@@ -306,6 +308,8 @@ struct EditorView: View {
             }
             .padding()
         }
+        .background(Theme.panelBackground)
+        .scrollContentBackground(.hidden)
     }
 
     private var copyPasteSection: some View {
@@ -396,6 +400,7 @@ struct EditorView: View {
     private var lensSection: some View {
         PanelSection(title: "Lens Corrections") {
             Toggle("Distortion, Vignette & CA", isOn: $values.lensCorrectionEnabled)
+                .tint(Theme.accent)
                 .disabled(!(processor?.lensCorrectionSupported ?? false)
                           && !(processor?.lensCorrectionFallbackAvailable ?? false))
             if processor?.lensCorrectionSupported == false {
@@ -459,6 +464,7 @@ struct EditorView: View {
             }
             if values.geometryMode != .off {
                 Toggle("Auto-crop ragged corners", isOn: $values.autoCropEnabled)
+                    .tint(Theme.accent)
                     .font(.caption)
             }
         }
@@ -1369,17 +1375,33 @@ private enum ToneCurveChannel: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-/// A titled group of controls with a light divider, matching the sidebar look.
+/// A collapsible titled group of controls with a bottom divider, matching
+/// the reference mockup's "LIGHT"/"COLOR" panel headers (see `Theme`).
 struct PanelSection<Content: View>: View {
     let title: String
     @ViewBuilder var content: Content
 
+    @State private var isExpanded = true
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title.uppercased())
-                .font(.caption.bold())
-                .foregroundStyle(.secondary)
-            content
+            Button {
+                withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+            } label: {
+                HStack {
+                    Text(title.uppercased())
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                }
+            }
+            .buttonStyle(.plain)
+            if isExpanded { content }
+            Divider().opacity(0.5)
         }
     }
 }

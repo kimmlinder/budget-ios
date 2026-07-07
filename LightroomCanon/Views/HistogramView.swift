@@ -7,19 +7,30 @@ struct HistogramView: View {
     let data: HistogramData?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 6).fill(.black)
-            if let data {
-                Canvas { context, size in
-                    context.blendMode = .plusLighter
-                    draw(data.red, color: .red, in: &context, size: size)
-                    draw(data.green, color: .green, in: &context, size: size)
-                    draw(data.blue, color: .blue, in: &context, size: size)
-                }
-                .padding(4)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("HISTOGRAM")
+                    .font(.caption.bold())
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("RGB")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
+            ZStack {
+                RoundedRectangle(cornerRadius: 6).fill(Theme.panelBackground)
+                if let data {
+                    Canvas { context, size in
+                        context.blendMode = .plusLighter
+                        draw(data.red, color: .red, in: &context, size: size)
+                        draw(data.green, color: .green, in: &context, size: size)
+                        draw(data.blue, color: .blue, in: &context, size: size)
+                    }
+                    .padding(4)
+                }
+            }
+            .frame(height: 80)
         }
-        .frame(height: 80)
     }
 
     private func draw(_ bins: [Float], color: Color, in context: inout GraphicsContext, size: CGSize) {

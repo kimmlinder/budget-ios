@@ -22,6 +22,12 @@ struct LightroomCanonApp: App {
     var body: some Scene {
         WindowGroup {
             LibraryView()
+                // Matches the reference design's dark-room-style editor
+                // (see Theme) — a permanent dark UI regardless of system
+                // appearance, the same convention Lightroom/Capture One/
+                // Photoshop use since a bright chrome around the photo being
+                // judged skews color perception.
+                .preferredColorScheme(.dark)
         }
         .modelContainer(container)
         #if os(macOS)

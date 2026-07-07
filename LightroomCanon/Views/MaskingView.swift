@@ -52,7 +52,7 @@ struct MaskRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Toggle("", isOn: $mask.isEnabled).labelsHidden()
+            Toggle("", isOn: $mask.isEnabled).labelsHidden().tint(Theme.accent)
         }
         .padding(6)
         .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)

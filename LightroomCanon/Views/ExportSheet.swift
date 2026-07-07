@@ -51,6 +51,7 @@ struct ExportSheet: View {
                     Slider(value: $options.quality, in: 0.1...1.0)
                 }
                 Toggle("Limit long edge", isOn: $limitDimension)
+                    .tint(Theme.accent)
                 if limitDimension {
                     VStack(alignment: .leading) {
                         Text("\(Int(dimension)) px")

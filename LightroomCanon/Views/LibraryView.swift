@@ -49,6 +49,7 @@ struct LibraryView: View {
                     }
                 }
             }
+            .background(Theme.canvasBackground)
             .navigationTitle("Library")
             .navigationDestination(for: Photo.self) { photo in
                 EditorView(photo: photo)
