@@ -396,11 +396,18 @@ struct EditorView: View {
     private var lensSection: some View {
         PanelSection(title: "Lens Corrections") {
             Toggle("Distortion, Vignette & CA", isOn: $values.lensCorrectionEnabled)
-                .disabled(!(processor?.lensCorrectionSupported ?? false))
+                .disabled(!(processor?.lensCorrectionSupported ?? false)
+                          && !(processor?.lensCorrectionFallbackAvailable ?? false))
             if processor?.lensCorrectionSupported == false {
-                Text("No lens profile available for this photo.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if processor?.lensCorrectionFallbackAvailable == true {
+                    Text("Using a bundled Lensfun-derived profile — Apple's own lens correction doesn't recognize this lens.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No lens profile available for this photo.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
     }

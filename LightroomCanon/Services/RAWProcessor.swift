@@ -44,6 +44,17 @@ final class RAWProcessor {
     /// reasonable "normal" lens value when the file doesn't report one.
     private let focalLength35mm: Float
 
+    /// A `LensProfile` fallback for when `CIRAWFilter` itself has no
+    /// built-in correction for this lens (see `lensCorrectionSupported`),
+    /// plus the actual (not 35mm-equivalent) focal length and f-number
+    /// needed to resolve it against a specific render's pixel size — see
+    /// `applyLensCorrectionFallback`. Read directly from EXIF (mirroring
+    /// `focalLength35mm`, decoupled from `Photo`/SwiftData); `nil` when no
+    /// matching profile is bundled or any EXIF piece is missing.
+    private let lensProfile: LensProfile?
+    private let lensFocalLength: Float?
+    private let lensAperture: Float?
+
     /// Full-quality, on-demand RAW decoding — every render re-runs
     /// `CIRAWFilter`'s demosaic at native resolution. Only for Export and
     /// Cloud Straighten's upload; the interactive editor uses
@@ -56,6 +67,7 @@ final class RAWProcessor {
         self.baseTemperature = filter.neutralTemperature
         self.baseTint = filter.neutralTint
         self.focalLength35mm = Self.readFocalLength35mm(from: url) ?? 35
+        (self.lensProfile, self.lensFocalLength, self.lensAperture) = Self.readLensProfile(from: url)
     }
 
     /// Renders from a pre-corrected image on disk (e.g. the result of
@@ -72,6 +84,7 @@ final class RAWProcessor {
         self.baseTemperature = baseTemperature
         self.baseTint = baseTint
         self.focalLength35mm = Self.readFocalLength35mm(from: metadataURL) ?? 35
+        (self.lensProfile, self.lensFocalLength, self.lensAperture) = Self.readLensProfile(from: metadataURL)
     }
 
     /// Decodes `url` once, at a fraction of its native resolution, and
@@ -133,6 +146,27 @@ final class RAWProcessor {
         return value.floatValue
     }
 
+    /// Looks up a bundled `LensProfile` fallback (see `LensProfileDatabase`)
+    /// for this file's actual camera/lens, plus the actual (not
+    /// 35mm-equivalent) focal length and f-number needed to resolve it —
+    /// `nil` wherever any of camera/lens/focal/aperture is missing, or no
+    /// matching profile is bundled.
+    private static func readLensProfile(from url: URL) -> (LensProfile?, Float?, Float?) {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+        else { return (nil, nil, nil) }
+        let tiff = props[kCGImagePropertyTIFFDictionary] as? [CFString: Any]
+        let exif = props[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        let cameraModel = tiff?[kCGImagePropertyTIFFModel] as? String
+        let lensModel = exif?[kCGImagePropertyExifLensModel] as? String
+        let focal = (exif?[kCGImagePropertyExifFocalLength] as? NSNumber)?.floatValue
+        let aperture = (exif?[kCGImagePropertyExifFNumber] as? NSNumber)?.floatValue
+        guard let focal, let aperture,
+              let profile = LensProfileDatabase.profile(cameraModel: cameraModel, lensModel: lensModel)
+        else { return (nil, focal, aperture) }
+        return (profile, focal, aperture)
+    }
+
     /// The RAW's native pixel dimensions from its embedded metadata — cheap
     /// to read (no demosaic needed), used to size `scaleFactor` for `.preview`
     /// quality without first paying for a full-resolution decode.
@@ -162,6 +196,32 @@ final class RAWProcessor {
     /// `false` in override mode — there's no RAW to carry a lens profile.
     var lensCorrectionSupported: Bool { rawFilter?.isLensCorrectionSupported ?? false }
 
+    /// Whether `LensCorrectionKernel` can step in with a bundled
+    /// Lensfun-derived profile (see `LensProfileDatabase`) for lenses
+    /// `CIRAWFilter` itself has no correction for — this is what actually
+    /// drives the Lens Corrections toggle being enabled when
+    /// `lensCorrectionSupported` is `false`.
+    var lensCorrectionFallbackAvailable: Bool { !lensCorrectionSupported && lensProfile != nil }
+
+    /// Applies `LensCorrectionKernel`'s distortion + vignetting correction
+    /// using the bundled fallback profile, resolved against `image`'s own
+    /// pixel size (which can be the full native RAW or the fast-preview's
+    /// downscaled bake — the correction math itself is resolution-independent
+    /// via `LensCorrectionKernel.Resolved`'s normalized coordinate system).
+    /// A no-op whenever `lensCorrectionSupported` is `true` (Apple's own
+    /// correction already ran as part of `rawFilter.outputImage`) or no
+    /// fallback profile/EXIF data is available.
+    private func applyLensCorrectionFallback(_ image: CIImage, enabled: Bool) -> CIImage {
+        guard enabled, !lensCorrectionSupported,
+              let lensProfile, let lensFocalLength, let lensAperture
+        else { return image }
+        let resolved = LensCorrectionKernel.resolve(
+            lensProfile, focalLength: Double(lensFocalLength), aperture: Double(lensAperture),
+            imageWidth: image.extent.width, imageHeight: image.extent.height
+        )
+        return LensCorrectionKernel.apply(to: image, resolved: resolved)
+    }
+
     /// Produce the fully-adjusted `CIImage` for the given edit, optionally
     /// compositing local-adjustment masks (Subject/Sky/Background/custom —
     /// see `MaskLayer`/`SAMSegmentationService`) on top of the global edit.
@@ -183,13 +243,16 @@ final class RAWProcessor {
         } else if let overrideImage {
             // No RAW exposure/white-balance stage available on an
             // already-rendered bitmap, so approximate both generically.
-            // Lens correction has no such equivalent and is simply frozen at
-            // whatever it was when this bitmap was baked (see `fastPreview`).
+            // Apple's own lens correction has no such equivalent and is
+            // simply frozen at whatever it was when this bitmap was baked
+            // (see `fastPreview`) — but `applyLensCorrectionFallback` below
+            // still re-runs live every call, same as everything else here.
             image = applyExposure(overrideImage, ev: v.exposure / 20.0)
             image = applyWhiteBalance(image, temperature: v.temperature, tint: v.tint)
         } else {
             return nil
         }
+        image = applyLensCorrectionFallback(image, enabled: v.lensCorrectionEnabled)
 
         // Soft highlight shoulder, right after exposure/white-balance and
         // before anything else touches the image — see
